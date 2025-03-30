@@ -8,3 +8,5 @@ This PICO code reads from the I2C interface on the pico, compares the readings w
 lights LEDs in sequence based on the sound level.
 
 Used for indicating noise level in venue environments.
+
+When connected to the PICO module via USB serial, a menu system allows on-the-fly changes to the threshold settings.
