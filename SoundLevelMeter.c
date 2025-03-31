@@ -3,6 +3,8 @@
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "hardware/i2c.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
 
 // I2C defines
 // This example will use I2C0 on GPIO8 (SDA) and GPIO9 (SCL) running at 400KHz.
@@ -11,6 +13,10 @@
 #define I2C_SDA 8
 #define I2C_SCL 9
 #define I2C_DEVICE_ADDRESS 0x48
+
+#define FLASH_TARGET_OFFSET ((1024*1024*2)-(FLASH_SECTOR_SIZE*2))        // user flash region 2 x flash sectors before top of flash mem
+const uint8_t *flash_target = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
+
 
 #define DEBUG
 
@@ -145,6 +151,40 @@ i2c_write_blocking(I2C_PORT, I2C_DEVICE_ADDRESS, mybuf, num_bytes+1, 0);
 }
 
 
+void flash_save(void)
+{
+    uint8_t ram_buffer[FLASH_PAGE_SIZE];              // RAM staging for flash write
+
+    for(uint16_t count=0; count<FLASH_PAGE_SIZE; count++)
+        ram_buffer[count] = flash_target[count];      // load buffer with Flash contents
+
+    ram_buffer[0] = quiet;                            // load thresholds into RAM buffer
+    ram_buffer[1] = normal;
+    ram_buffer[2] = loud;
+    ram_buffer[3] = tooloud;
+
+    uint32_t ints = save_and_disable_interrupts();      // USB Uart uses interrupts, so disable
+    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t*) ram_buffer, FLASH_PAGE_SIZE);
+    restore_interrupts (ints);
+}
+
+void flash_load(void)
+{
+    if(flash_target[0] == 0xFF)                         // Flash has not been programmed
+    {
+        quiet = 50; normal = 70; loud = 77; tooloud = 84;   // set threshold initial levels
+    }
+    else
+    {
+        quiet = flash_target[0];                            // load variable from flash store
+        normal = flash_target[1];                           // load variable from flash store
+        loud = flash_target[2];                             // load variable from flash store
+        tooloud = flash_target[3];                          // load variable from flash store
+    }
+}
+
+
 /*
 * Menu system for USB serial connection.
 * Menu options: q n l t (quiet, normal, loud, tooloud)
@@ -222,6 +262,11 @@ void menu(char input)
         case 'r':
             quiet = 50; normal = 70; loud = 77; tooloud = 84;   // set threshold initial levels
             break;
+    
+        case 's':                                               // save threshold values to FLASH
+            flash_save();
+            printf("Saved threshold values to FLASH.\n");
+            break;
         
         default:
             printf("\nType letter for threshold to set:\nq - Quiet\nn - Normal\nl - Loud\nt - TooLoud\nr - reset to defaults\n");
@@ -234,7 +279,7 @@ void menu(char input)
         tooloud = loud + 2;
 
     printf("\nCurrent threshold settings:\nQuiet:   %d\nNormal:  %d\nLoud:    %d\nTooLoud: %d\n\n", quiet, normal, loud, tooloud);
-    sleep_ms(4000);     // allow time for user to read above message
+    sleep_ms(3000);     // allow time for user to read above message
 }
 
 
@@ -248,7 +293,7 @@ int main()
     init_i2c();
     init_gpio();
 
-    menu('r');                      // set levels to default values
+    flash_load();                      // get levels from FLASH (or default)
 #ifdef NEVER
     sleep_ms(5000);
     printf("Hello, world!\n");
