@@ -269,7 +269,7 @@ void menu(char input)
             break;
         
         default:
-            printf("\nType letter for threshold to set:\nq - Quiet\nn - Normal\nl - Loud\nt - TooLoud\nr - reset to defaults\n");
+            printf("\nType letter for threshold to set:\nq - Quiet\nn - Normal\nl - Loud\nt - TooLoud\nr - reset to defaults\ns - save to FLASH\n");
     }
     if(quiet >= normal)
         normal = quiet + 2;     // normalise values (ensure each level is higher than the last)
